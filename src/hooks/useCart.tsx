@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { api } from '../services/api';
 import { Product, Stock } from '../types';
@@ -31,6 +31,20 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
 
     return [];
   });
+  
+  const prevCartRef = useRef<Product[]>();
+
+  useEffect(() => {
+    prevCartRef.current = cart;
+  });
+
+  const previousCart = prevCartRef.current ?? cart;
+
+  useEffect(() => {
+    if (previousCart !== cart) {
+      localStorage.setItem('@RocketShoes:cart', JSON.stringify(cart));
+    }
+  }, [cart, previousCart])
 
   const addProduct = async (productId: number) => {
     try {
@@ -55,7 +69,6 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
           })     
       }
       setCart(updatedCart);
-      localStorage.setItem('@RocketShoes:cart', JSON.stringify(updatedCart));
     } catch {
       toast.error('Erro na adição do produto');
     }
@@ -70,7 +83,6 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
       }
       updatedCart.splice(productIndex, 1);
       setCart(updatedCart);
-      localStorage.setItem('@RocketShoes:cart', JSON.stringify(updatedCart));
     } catch {
       toast.error('Erro na remoção do produto');
     }
@@ -81,9 +93,25 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
     amount,
   }: UpdateProductAmount) => {
     try {
-      // TODO
+      if (amount <= 0) {
+        return;
+      }
+      await api.get(`stock/${productId}`).then(response => {
+        const amountStock = response.data.amount;
+        if (amount > amountStock) {
+          toast.error('Quantidade solicitada fora de estoque');
+          return;
+        }
+        const updatedCart = [...cart]; // qualquer alteracao no novo array updatedCart não refletira no array cart
+        const productIndex = updatedCart.findIndex(i => {return i.id === productId})
+        if (productIndex === -1) {
+          throw Error();
+        }
+        updatedCart[productIndex].amount = amount;
+        setCart(updatedCart);
+      })   
     } catch {
-      // TODO
+      toast.error('Erro na alteração de quantidade do produto');
     }
   };
 
